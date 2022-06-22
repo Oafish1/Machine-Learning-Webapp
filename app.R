@@ -16,7 +16,7 @@ reticulate::virtualenv_install(virtualenv_dir, packages=PYTHON_DEPENDENCIES, ign
 reticulate::use_virtualenv(virtualenv_dir, required=T)
 
 # Import python functions
-# reticulate::source_python('./maniNetCluster/pyManifold.py')
+reticulate::source_python('./maniNetCluster/pyManifold.py')
 
 # UI
 ui <- shinyUI(
@@ -27,13 +27,22 @@ ui <- shinyUI(
       sidebarLayout(
         sidebarPanel(
           selectizeInput(
-            "Dataset", label="Data", choices=list("D1", "D2", "D3", "D4", "D5"),
+            "dataset", label="Data", choices=list("D1", "D2", "D3", "D4", "D5"),
             multiple=T, options=list(create=TRUE, placeholder="Select Datasets")
           ),
+          selectizeInput(
+            "color", label="Color", choices=list("cell_type", "time"), multiple=F
+          ),
+          radioButtons("cluster", label="Cluster Method",
+                       choices=list("PAM", "K-Means", "KNN")
+          ),
           radioButtons("method", label="Integration Method",
-                       choices=list("BOMA", "JAMIE", "Unioncom", "NLMA")
+                       choices=list("BOMA", "JAMIE", "Unioncom",
+                                    "Non-Linear Manifold Alignment",
+                                    "Linear Manifold Alignment",
+                                    "Non-Linear Manifold Warping",
+                                    "Manifold Warping", "CCA")
           )
-          # https://stackoverflow.com/a/19131027
         ),
         mainPanel( plotOutput("sampleGraph") )
       )
@@ -45,6 +54,12 @@ ui <- shinyUI(
           selectizeInput(
             "Dataset", label="Data", choices=list("D1", "D2", "D3", "D4", "D5"),
             multiple=T, options=list(create=TRUE, placeholder="Select Datasets")
+          ),
+          selectizeInput(
+            "color", label="Color", choices=list("cell_type", "time"), multiple=F
+          ),
+          radioButtons("cluster", label="Cluster Method",
+                       choices=list("PAM", "K-Means", "KNN")
           ),
           radioButtons("method", label="Imputation Method",
                        choices=list("MOFA+", "JAMIE", "Polarbear")
