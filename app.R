@@ -9,27 +9,6 @@ library(shinyjs)
 # BiocManager::install("GEOquery")
 library(GEOquery)
 
-# Samples
-# samp = phenoData(gse)$geo_accession[c(1:10)]
-# data = NULL
-# for (s in samp) {
-#   s_gse = getGEO(s, GSEMatrix = TRUE)
-#   if (is.null(data)) {
-#     data = as.data.frame(s_gse@dataTable@table[,2])
-#     rownames(data) = s_gse@dataTable@table[,1]
-#   }
-#   else
-#     data = cbind(data, s_gse@dataTable@table[,2])
-# }
-# colnames(data) = samp
-# 
-# pca = prcomp(t(data))
-# cl = phenoData(gse)@data[,'title'][c(1:10)]
-# cbind(as.data.frame(pca$x[,c(1:2)]), cl)
-# pl = ggplot(data=as.data.frame(pca$x[,c(1:2)]), mapping=aes(x=PC1, y=PC2, color=cl))
-# pl = pl + geom_point()
-# pl
-
 # Set up reticulate (py3)
 PYTHON_DEPENDENCIES = c('pip', 'matplotlib', 'pandas', 'scipy', 'sklearn')
 virtualenv_dir = Sys.getenv('VIRTUALENV_NAME')
@@ -43,13 +22,60 @@ reticulate::use_virtualenv(virtualenv_dir, required=T)
 # Import python functions
 reticulate::source_python('./maniNetCluster/pyManifold.py')
 
+# # Testing
+# gse = getGEO("GSE21653", GSEMatrix = TRUE)[[1]]
+# samp = phenoData(gse)$geo_accession[c(1:10)]
+# data = NULL
+# for (s in samp) {
+#   s_gse = getGEO(s, GSEMatrix = TRUE)
+#   if (is.null(data)) {
+#     data = as.data.frame(s_gse@dataTable@table[,2])
+#     rownames(data) = s_gse@dataTable@table[,1]
+#   }
+#   else
+#     data = cbind(data, s_gse@dataTable@table[,2])
+# }
+# colnames(data) = samp
+# t_gse1 = gse
+# t_gse1_data = data[c(1:100), ]
+# 
+# gse = getGEO("GSE21654", GSEMatrix = TRUE)[[1]]
+# samp = phenoData(gse)$geo_accession[c(1:10)]
+# data = NULL
+# for (s in samp) {
+#   s_gse = getGEO(s, GSEMatrix = TRUE)
+#   if (is.null(data)) {
+#     data = as.data.frame(s_gse@dataTable@table[,2])
+#     rownames(data) = s_gse@dataTable@table[,1]
+#   }
+#   else
+#     data = cbind(data, s_gse@dataTable@table[,2])
+# }
+# colnames(data) = samp
+# t_gse2 = gse
+# t_gse2_data = data[c(1:100), ]
+
+# # Sample
+# mat1 = t_gse1_data
+# mat2 = t_gse2_data
+#
+# aligned = ManiNetCluster(
+#   t(mat1), t(mat2),
+#   nameX='s1',nameY='s2',
+#   corr=Correspondence(matrix=cor(mat1, mat2)),
+#   d=as.integer(2),
+#   method='nonlinear manifold aln',
+#   k_NN=as.integer(3),
+#   k_medoids=as.integer(6)
+# )
+
 # UI
 ui <- shinyUI(
   navbarPage(
     "ML Webapp",
     tabPanel(
-      "Workflow",
-      p("Example.")
+      "Flowcharts",
+      img(src="fig1.png", align="left")
     ),
     tabPanel(
       "Multi-Modal Integration",
@@ -70,15 +96,16 @@ ui <- shinyUI(
             "color2", label="Color 2", choices=list(), multiple=F
           ),
           selectizeInput("cluster", label="Cluster Method",
-                       choices=list("PAM", "K-Means", "KNN")
+                         choices=list("PAM", "K-Means", "KNN")
           ),
           selectizeInput("method", label="Integration Method",
-                       choices=list("BOMA", "JAMIE", "Unioncom",
-                                    "Non-Linear Manifold Alignment",
-                                    "Linear Manifold Alignment",
-                                    "Non-Linear Manifold Warping",
-                                    "Manifold Warping", "CCA")
+                         choices=list("BOMA", "JAMIE", "Unioncom",
+                                      "Non-Linear Manifold Alignment",
+                                      "Linear Manifold Alignment",
+                                      "Non-Linear Manifold Warping",
+                                      "Manifold Warping", "CCA")
           ),
+          imageOutput("butterfly"),
         ),
         mainPanel(
           plotOutput("integrated1"),
@@ -106,10 +133,10 @@ ui <- shinyUI(
             "color", label="Color", choices=list("cell_type", "time"), multiple=F
           ),
           selectizeInput("cluster", label="Cluster Method",
-                       choices=list("PAM", "K-Means", "KNN")
+                         choices=list("PAM", "K-Means", "KNN")
           ),
           selectizeInput("method", label="Imputation Method",
-                       choices=list("MOFA+", "JAMIE", "Polarbear")
+                         choices=list("MOFA+", "JAMIE", "Polarbear")
           )
         ),
         mainPanel( plotOutput("sampleGraph2") )
@@ -121,16 +148,19 @@ ui <- shinyUI(
 
 # Server
 server <- function(input, output, session) {
+  # DATA GENERATION
   r_data <- reactive({
     set.seed(42)
     data.frame(x=rnorm(1000), y=rnorm(1000))
   })
   
   gse1 <- reactive({ # Crashes on invalid entry
+    return(t_gse1)
     getGEO(input$dataset1, GSEMatrix = TRUE)[[1]]
   })
   
   gse2 <- reactive({
+    return(t_gse2)
     getGEO(input$dataset2, GSEMatrix = TRUE)[[1]]
   })
   
@@ -150,6 +180,32 @@ server <- function(input, output, session) {
     data
   }
   
+  gse1_data <- reactive({
+    return(t_gse1_data) # testing
+    gse_to_data(gse1())
+  })
+  
+  gse2_data <- reactive({
+    return(t_gse2_data) # testing
+    gse_to_data(gse2())
+  })
+  
+  # DATA PROCESSING
+  integrated_data <- reactive({
+    mat1 = gse1_data()
+    mat2 = gse2_data()
+    aligned = ManiNetCluster(
+      t(mat1), t(mat2),
+      nameX='s1',nameY='s2',
+      corr=Correspondence(matrix=cor(mat1, mat2)),
+      d=as.integer(2),
+      method='nonlinear manifold aln',
+      k_NN=as.integer(3),
+      k_medoids=as.integer(6)
+    )
+  })
+  
+  # OUTPUTS
   output$summary1 <- renderText({
     experimentData(gse1())@other$summary
   })
@@ -158,24 +214,29 @@ server <- function(input, output, session) {
     experimentData(gse2())@other$summary
   })
   
+  output$butterfly <- renderImage({
+    # TODO - generate through python
+    list(src="www/ex_butterfly.png", width="100%")
+  }, deleteFile=FALSE)
+  
   output$integrated1 <- renderPlot({
     gse = gse1()
-    data = gse_to_data(gse)
-    pca = prcomp(t(data))
+    data = integrated_data()
+    data = data[data$data == 's1',]
     cl = phenoData(gse)@data[,input$color1][c(1:10)] # TODO: Remove limit
-    data = cbind(as.data.frame(pca$x[,c(1:2)]), Group=cl)
-    pl = ggplot(data=data, mapping=aes(x=PC1, y=PC2, color=Group))
+    data = cbind(as.data.frame(data), Group=cl)
+    pl = ggplot(data=data, mapping=aes(x=Val0, y=Val1, color=Group))
     pl = pl + geom_point()
     pl
   })
   
   output$integrated2 <- renderPlot({
     gse = gse2()
-    data = gse_to_data(gse)
-    pca = prcomp(t(data))
+    data = integrated_data()
+    data = data[data$data == 's2',]
     cl = phenoData(gse)@data[,input$color2][c(1:10)] # TODO: Remove limit
-    data = cbind(as.data.frame(pca$x[,c(1:2)]), Group=cl)
-    pl = ggplot(data=data, mapping=aes(x=PC1, y=PC2, color=Group))
+    data = cbind(as.data.frame(data), Group=cl)
+    pl = ggplot(data=data, mapping=aes(x=Val0, y=Val1, color=Group))
     pl = pl + geom_point()
     pl
   })
@@ -198,4 +259,3 @@ server <- function(input, output, session) {
 
 # Run
 shinyApp(ui=ui, server=server)
-
